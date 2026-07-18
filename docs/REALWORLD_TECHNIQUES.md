@@ -68,6 +68,16 @@ Legend: ✅ implemented (default) · 🟡 partial · 📋 recommended / roadmap.
   and the block loop renders in Eevee; `sky_model: "flat"` restores the solid
   colour. Turbidity/ground-albedo are tunable. Gives a real horizon gradient and
   atmospheric depth in every render.
+
+  *Why this is the right choice (researched):* Hosek/Wilkie is the model designed
+  for **ground-level / horizon** views — exactly this use case — whereas Preetham
+  targets high-altitude/aerial and reads more pastel. Nishita is the most
+  physically accurate model but is **Cycles-only** (still true in 4.2/4.3), so it
+  cannot drive the Eevee block loop. An HDRI would be photoreal but needs an
+  external, licence-bound `.hdr` asset, which breaks the skill's reproducible,
+  key-less, procedural contract. So Hosek/Wilkie is the best *available* sky here.
+  Caveat: Hosek/Wilkie and Preetham are marked upstream-legacy and may be
+  replaced; if the loop ever renders in Cycles, prefer Nishita there.
 - ✅ **Rooftop props.** Individual buildings receive small deterministic roof
   clutter (chimneys, vents, AC/stairwell boxes) via `roof_props`, the standard
   procedural-city trick for breaking up bare rooftops — geometry-only, seeded
@@ -115,3 +125,7 @@ Legend: ✅ implemented (default) · 🟡 partial · 📋 recommended / roadmap.
 - blender-osm on the OSM wiki: <https://wiki.openstreetmap.org/wiki/Blender-osm>
 - OpenTopoData (elevation API used by `--terrain`): <https://www.opentopodata.org/>
 - NASA SRTM: <https://www.earthdata.nasa.gov/data/instruments/srtm>
+- Blender Sky Texture (Hosek/Wilkie, Preetham, Nishita; Eevee support notes):
+  <https://docs.blender.org/manual/en/latest/render/shader_nodes/textures/sky.html>
+- Sky model comparison (Hosek/Wilkie vs Nishita, ground vs aerial use):
+  <https://blenderartists.org/t/sky-texture-hosek-wilkie-vs-nishita/1492126>
