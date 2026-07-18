@@ -237,3 +237,9 @@ def test_roof_orientation_across_rotates_the_general_axis():
     across = bb._roof_axis(ring, 50.0, 5.0, "across", None, "gabled")
     dot = along[0] * across[0] + along[1] * across[1]
     assert abs(dot) < 1e-6
+
+
+def test_sky_and_roof_props_defaults():
+    # Physical sky (Eevee-compatible) and rooftop clutter ship on by default.
+    assert bb.DEFAULT_STYLE["sky_model"] == "hosek_wilkie"
+    assert bb.DEFAULT_STYLE["roof_props"]["enabled"] is True

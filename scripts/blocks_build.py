@@ -97,6 +97,16 @@ DEFAULT_STYLE = {
                "holdout_elev_deg": 28.0},
     "sun": {"energy": 3.0, "angle_deg": 14.0, "rot_deg": [52, 6, 35]},
     "sky": [0.60, 0.68, 0.78, 1.3],
+    # sky_model renders a physical sky gradient (Eevee-compatible Hosek/Wilkie,
+    # falling back to Preetham) aligned to the sun, instead of a flat background
+    # colour. Set to "flat" to fall back to the solid `sky` colour above.
+    "sky_model": "hosek_wilkie",
+    "sky_turbidity": 2.6,
+    "sky_ground_albedo": 0.3,
+    "sky_strength": 1.0,
+    # roof_props scatters small deterministic rooftop clutter (chimneys, vents,
+    # AC/stairwell boxes) on individual buildings for silhouette detail.
+    "roof_props": {"enabled": True, "density": 1.0},
     "palette": {
         "GROUND": [0.79, 0.78, 0.73],
         "ASPHALT": [0.44, 0.44, 0.47],
@@ -1052,6 +1062,112 @@ def make_image_color_sampler(scene, style, base_dir=None):
     return sample
 
 
+def setup_sky_world(world, style, sun=None):
+    """Set the world to a physical sky gradient aligned to the sun. Uses
+    Hosek/Wilkie (Eevee-compatible), falling back to Preetham, then to the flat
+    `sky` colour. `sky_model == 'flat'` forces the solid colour."""
+    world.use_nodes = True
+    tree = world.node_tree
+    background = tree.nodes.get("Background") or tree.nodes.new("ShaderNodeBackground")
+    output = tree.nodes.get("World Output") or tree.nodes.new("ShaderNodeOutputWorld")
+    try:
+        tree.links.new(background.outputs[0], output.inputs[0])
+    except Exception:
+        pass
+    for node in list(tree.nodes):
+        if node.type == "TEX_SKY":
+            tree.nodes.remove(node)
+    flat = style.get("sky", [0.60, 0.68, 0.78, 1.3])
+    if str(style.get("sky_model", "hosek_wilkie")).lower() in ("flat", "none", "solid"):
+        background.inputs[0].default_value = (*flat[:3], 1.0)
+        background.inputs[1].default_value = float(flat[3])
+        return "flat"
+    sky = tree.nodes.new("ShaderNodeTexSky")
+    applied = "flat"
+    for sky_type in ("HOSEK_WILKIE", "PREETHAM"):
+        try:
+            sky.sky_type = sky_type
+            applied = sky_type.lower()
+            break
+        except Exception:
+            continue
+    if applied == "flat":
+        tree.nodes.remove(sky)
+        background.inputs[0].default_value = (*flat[:3], 1.0)
+        background.inputs[1].default_value = float(flat[3])
+        return "flat"
+    if sun is not None:
+        from mathutils import Vector
+        light_dir = sun.rotation_euler.to_quaternion() @ Vector((0.0, 0.0, -1.0))
+        try:
+            sky.sun_direction = (-light_dir).normalized()
+        except Exception:
+            pass
+    for attr, value in (("turbidity", float(style.get("sky_turbidity", 2.6))),
+                        ("ground_albedo", float(style.get("sky_ground_albedo", 0.3)))):
+        try:
+            setattr(sky, attr, value)
+        except Exception:
+            pass
+    try:
+        tree.links.new(sky.outputs[0], background.inputs[0])
+    except Exception:
+        pass
+    background.inputs[1].default_value = float(style.get("sky_strength", 1.0))
+    return applied
+
+
+def add_roof_props(style, collection=None):
+    """Scatter small deterministic rooftop clutter (chimneys, vents, AC boxes)
+    on individual buildings so roofs are not bare. Geometry-only, per-building
+    deterministic; returns the number of buildings that received props."""
+    cfg = style.get("roof_props") or {}
+    if not cfg.get("enabled", True):
+        return 0
+    from mathutils import Vector
+    density = float(cfg.get("density", 1.0))
+    prop_mat = make_material("BLK_RoofProp", [0.40, 0.40, 0.42], roughness=0.85)
+    if collection is None:
+        collection = bpy.data.collections.get("BLK_09_ROOFPROPS")
+        if collection is None:
+            collection = bpy.data.collections.new("BLK_09_ROOFPROPS")
+            bpy.context.scene.collection.children.link(collection)
+    made = 0
+    for obj in [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("Bld_")]:
+        corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+        xs = [v.x for v in corners]
+        ys = [v.y for v in corners]
+        minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+        top = max(v.z for v in corners)
+        width, depth = maxx - minx, maxy - miny
+        area = width * depth
+        if top < 5.0 or area < 60.0:
+            continue
+        seed = zlib.crc32(obj.name.encode())
+        count = max(1, min(5, int(area / 380.0 * density)))
+        bm = bmesh.new()
+        for k in range(count):
+            r1 = ((seed >> (k * 6)) % 1000) / 1000.0
+            r2 = ((seed >> (k * 6 + 3)) % 1000) / 1000.0
+            r3 = ((seed >> (k * 6 + 9)) % 100) / 100.0
+            px = minx + width * (0.2 + 0.6 * r1)
+            py = miny + depth * (0.2 + 0.6 * r2)
+            prop_h = 1.2 + 2.4 * r3
+            prop_s = 0.8 + 1.6 * r3
+            add_box(bm, px, py, top + prop_h / 2.0, prop_s, prop_s, prop_h)
+        if not bm.faces:
+            bm.free()
+            continue
+        mesh = bpy.data.meshes.new("RoofProps_" + obj.name)
+        bm.to_mesh(mesh)
+        bm.free()
+        prop_obj = bpy.data.objects.new("RoofProps_" + obj.name, mesh)
+        prop_obj.data.materials.append(prop_mat)
+        collection.objects.link(prop_obj)
+        made += 1
+    return made
+
+
 def build_from_scene(scene_path, outdir, slug, style_path=None,
                      do_render=False, samples=None, clear=True):
     with open(scene_path, encoding="utf-8") as stream:
@@ -1403,12 +1519,8 @@ def build_from_scene(scene_path, outdir, slug, style_path=None,
 
     world = bpy.context.scene.world or bpy.data.worlds.new("World")
     bpy.context.scene.world = world
-    world.use_nodes = True
-    background = world.node_tree.nodes.get("Background")
-    if background:
-        sky = style["sky"]
-        background.inputs[0].default_value = (*sky[:3], 1.0)
-        background.inputs[1].default_value = sky[3]
+    setup_sky_world(world, style, sun)
+    add_roof_props(style)
 
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"

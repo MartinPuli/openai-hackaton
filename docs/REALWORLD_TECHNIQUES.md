@@ -61,6 +61,20 @@ Legend: ✅ implemented (default) · 🟡 partial · 📋 recommended / roadmap.
 - 🟡 **Water / green / pitch** areas are flat polygons by material.
 - 📋 **Vegetation** — `natural=tree`, `landuse=forest/grass` as scatter/instances.
 
+## Sky & atmosphere
+- ✅ **Physical sky.** The world uses a Sky Texture gradient aligned to the sun
+  instead of a flat background colour (`sky_model`). The default is
+  **Hosek/Wilkie** (falling back to Preetham) because **Nishita is Cycles-only**
+  and the block loop renders in Eevee; `sky_model: "flat"` restores the solid
+  colour. Turbidity/ground-albedo are tunable. Gives a real horizon gradient and
+  atmospheric depth in every render.
+- ✅ **Rooftop props.** Individual buildings receive small deterministic roof
+  clutter (chimneys, vents, AC/stairwell boxes) via `roof_props`, the standard
+  procedural-city trick for breaking up bare rooftops — geometry-only, seeded
+  per building, and skipped on tiny/short footprints.
+- 📋 **Volumetric haze / clouds** — aerial perspective for distance; deferred
+  (Eevee volumetrics are costly at city scale).
+
 ## Materials
 - ✅ Procedural per-feature block materials (roughness, saturation caps).
 - ✅ **Facade grammar and LOD.** `building:levels`, height, type/use, and material
