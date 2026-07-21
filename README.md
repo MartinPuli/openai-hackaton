@@ -5,6 +5,47 @@ editable block-based 3D scene in Blender. The main contribution is the agent loo
 
 `place -> scene -> render -> compare with reality -> correct -> repeat`
 
+## OpenAI Build Week: built with Codex and GPT-5.6
+
+GeoBlender was created during the July 13-21, 2026 OpenAI Build Week
+submission period. It builds on the pre-existing open-source
+[ahujasid/blender-mcp](https://github.com/ahujasid/blender-mcp) connection layer,
+while the repository-authored geographic pipeline, skills, safe Blender
+orchestration, checkpoints, evaluation policy, and block construction system are
+new Build Week work. The dated [commit history](https://github.com/MartinPuli/geoblender/commits/main) documents
+that development window.
+
+### How I collaborated with Codex
+
+- I used Codex with GPT-5.6 Sol as the implementation agent: it researched the
+  relevant OSM and Blender conventions, inspected the repository, wrote the
+  Python pipeline and skill instructions, and operated Blender through MCP.
+- Codex accelerated the repetitive engineering work: normalizing geographic
+  data, generating Blender payloads, adding safe-clear and checkpoint behavior,
+  creating tuning and held-out cameras, writing tests, and tracing failures in
+  dense Overpass queries.
+- We worked through a render-evaluate-correct loop rather than accepting the
+  first image. Codex rendered comparable views, ranked visible defects, changed
+  one failure family at a time, validated the artifacts, and restored the best
+  checkpoint when a later iteration regressed.
+- I made the key product and design decisions: real editable blocks instead of
+  pasted Google 3D Tiles, source provenance over hidden guesses, multi-view
+  anti-overfit evaluation, the open-source boundary, and the current football
+  stadium ticketing direction. I reviewed outputs and decided which iterations
+  were accepted or rejected.
+
+### Judge-ready demo and test path
+
+- [Two-minute public demo](https://youtu.be/SiVsczk-1vw)
+- [Prebuilt editable New York `.blend`](output/nyc_one_prompt_showcase/nyc_one_prompt_showcase_final.blend)
+- Install and run the no-rebuild checks with
+  `python3 -m pip install -e .` followed by `python3 -m pytest tests/ -q`.
+- Generate normalized data without Blender or an API key with
+  `place2blender "New York, NY" --radius 350 --no-render`.
+
+The required Codex `/feedback` Session ID is supplied separately in the Devpost
+submission form; it is not committed to this public repository.
+
 ## Upstream attribution
 
 The live Blender control layer is built on
